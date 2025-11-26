@@ -9,6 +9,9 @@ import process from 'process';
 import { intro, outro, confirm, isCancel, cancel, text } from '@clack/prompts';
 import chalk from 'chalk';
 import yoctoSpinner from 'yocto-spinner';
+import { edit } from '@coreviz/sdk';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -187,6 +190,72 @@ program.command('whoami')
             outro(chalk.green(`Logged in as: ${userDisplay}`));
         } else {
             outro(chalk.yellow('Not logged in.'));
+        }
+    });
+
+program.command('edit <image-path>')
+    .description('Edit an image using AI')
+    .option('-p, --prompt <prompt>', 'Text description of the desired edit')
+    .action(async (imagePath, options) => {
+        intro(chalk.bgHex('#663399').white('CoreViz AI Edit'));
+
+        const session = config.get('session');
+        if (!session || !session.access_token) {
+            cancel('You are not logged in. Please run `coreviz login` first.');
+            process.exit(1);
+        }
+
+        if (!fs.existsSync(imagePath)) {
+            cancel(`File not found: ${imagePath}`);
+            process.exit(1);
+        }
+
+        let prompt = options.prompt;
+        if (!prompt) {
+            prompt = await text({
+                message: 'What would you like to change in the image?',
+                placeholder: 'e.g., "Make it look like a painting" or "Add a red hat"',
+                validate(value) {
+                    if (value.length === 0) return `Value is required!`;
+                },
+            });
+
+            if (isCancel(prompt)) {
+                cancel('Operation cancelled.');
+                process.exit(0);
+            }
+        }
+
+        const spinner = yoctoSpinner({ text: "Processing image..." });
+        spinner.start();
+
+        try {
+            // Read file and convert to base64
+            const imageBuffer = fs.readFileSync(imagePath);
+            const base64Image = `data:image/${path.extname(imagePath).slice(1) || 'jpeg'};base64,${imageBuffer.toString('base64')}`;
+
+            console.log({
+                access_token: session.access_token,
+                prompt,
+            });
+            const resultBase64 = await edit(base64Image, {
+                prompt,
+                token: session.access_token
+            });
+
+            spinner.stop();
+
+            // Save result
+            const outputFilename = `edited-${path.basename(imagePath)}`;
+            const outputBuffer = Buffer.from(resultBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+            fs.writeFileSync(outputFilename, outputBuffer);
+
+            outro(chalk.green(`✅ Image edited successfully! Saved as ${outputFilename}`));
+
+        } catch (error) {
+            spinner.stop();
+            cancel(`Failed to edit image: ${error.message}`);
+            process.exit(1);
         }
     });
 
