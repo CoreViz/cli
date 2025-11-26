@@ -48,6 +48,10 @@ Describe an image:
 npx @coreviz/cli describe path/to/image.jpg
 ```
 
+![Screenshot of CoreViz CLI describing an image using AI.](./screenshots/describe.png)
+
+
+
 Edit an image with a text prompt:
 
 ```bash
