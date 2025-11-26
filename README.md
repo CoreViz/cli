@@ -66,6 +66,9 @@ Search local images using natural language:
 npx @coreviz/cli search "a person wearing a red t-shirt"
 ```
 
+![Screenshot of CoreViz CLI visually searching through a folder using AI.](./screenshots/search.png)
+
+
 This will index the images in your current directory (creating a `.index.db` file) and return the top matches for your query.
 
 ## Development

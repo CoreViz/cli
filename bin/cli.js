@@ -296,8 +296,11 @@ program.command('describe <image-path>')
 
 program.command('search <query>')
     .description('Search for images in the current directory using AI')
-    .action(async (query) => {
+    .option('-m, --mode <mode>', 'The mode to use for embedding. Defaults to "local".', 'local')
+    .action(async (query, options) => {
         intro(chalk.bgHex('#663399').white('CoreViz'));
+
+        const mode = options.mode || 'local';
 
         const session = config.get('session');
         if (!session || !session.access_token) {
@@ -345,6 +348,14 @@ program.command('search <query>')
             }
         }
 
+        if (mode === 'local') {
+            // You're using the local model, it might take a few minutes for the model to load on the first run.
+            spinner.text = "Loading local model, this might take a few minutes to load the first time...";
+            spinner.start();
+            await coreviz.embedLocal('text', { type: 'text', mode: mode });
+            spinner.stop();
+        }
+
         for (const file of files) {
             const filePath = path.join(process.cwd(), file);
             const stats = fs.statSync(filePath);
@@ -361,7 +372,7 @@ program.command('search <query>')
 
             try {
                 const base64Image = readImageAsBase64(filePath);
-                const { embedding } = await coreviz.embed(base64Image, { type: 'image', mode: 'local' });
+                const { embedding } = await coreviz.embed(base64Image, { type: 'image', mode: mode });
 
                 upsertFile.run(file, mtime, JSON.stringify(embedding));
             } catch (error) {
@@ -373,7 +384,7 @@ program.command('search <query>')
         spinner.text = "Processing search query...";
 
         try {
-            const { embedding: queryEmbedding } = await coreviz.embed(query, { type: 'text', mode: 'local' });
+            const { embedding: queryEmbedding } = await coreviz.embed(query, { type: 'text', mode: mode });
 
             const rows = db.prepare('SELECT path, embedding FROM images').all();
             const results = [];
