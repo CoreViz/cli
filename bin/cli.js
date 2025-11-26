@@ -54,6 +54,7 @@ program.command('login')
         try {
             const { data, error } = await authClient.device.code({
                 client_id: "coreviz-cli",
+                scope: "openid profile email",
             });
 
             spinner.stop();
@@ -234,10 +235,6 @@ program.command('edit <image-path>')
             const imageBuffer = fs.readFileSync(imagePath);
             const base64Image = `data:image/${path.extname(imagePath).slice(1) || 'jpeg'};base64,${imageBuffer.toString('base64')}`;
 
-            console.log({
-                access_token: session.access_token,
-                prompt,
-            });
             const resultBase64 = await edit(base64Image, {
                 prompt,
                 token: session.access_token
@@ -246,7 +243,7 @@ program.command('edit <image-path>')
             spinner.stop();
 
             // Save result
-            const outputFilename = `edited-${path.basename(imagePath)}`;
+            const outputFilename = `edited-${Date.now()}-${path.basename(imagePath)}`;
             const outputBuffer = Buffer.from(resultBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
             fs.writeFileSync(outputFilename, outputBuffer);
 
