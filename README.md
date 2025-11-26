@@ -1,6 +1,6 @@
 # @coreviz/cli
 
-CoreViz CLI tool - A command-line interface for CoreViz.
+An AI-powered CLI for working with photos. Semantically search, edit, tag and generate metadata for thousands of photos right from the command line. 
 
 ## Installation
 
