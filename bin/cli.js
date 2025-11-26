@@ -9,7 +9,7 @@ import process from 'process';
 import { intro, outro, confirm, isCancel, cancel, text } from '@clack/prompts';
 import chalk from 'chalk';
 import yoctoSpinner from 'yocto-spinner';
-import { edit } from '@coreviz/sdk';
+import { edit, describe } from '@coreviz/sdk';
 import fs from 'fs';
 import path from 'path';
 
@@ -231,9 +231,7 @@ program.command('edit <image-path>')
         spinner.start();
 
         try {
-            // Read file and convert to base64
-            const imageBuffer = fs.readFileSync(imagePath);
-            const base64Image = `data:image/${path.extname(imagePath).slice(1) || 'jpeg'};base64,${imageBuffer.toString('base64')}`;
+            const base64Image = readImageAsBase64(imagePath);
 
             const resultBase64 = await edit(base64Image, {
                 prompt,
@@ -255,5 +253,50 @@ program.command('edit <image-path>')
             process.exit(1);
         }
     });
+
+program.command('describe <image-path>')
+    .description('Describe an image using AI')
+    .action(async (imagePath) => {
+        intro(chalk.bgHex('#663399').white('CoreViz'));
+
+        const session = config.get('session');
+        if (!session || !session.access_token) {
+            cancel('You are not logged in. Please run `coreviz login` first.');
+            process.exit(1);
+        }
+
+        if (!fs.existsSync(imagePath)) {
+            cancel(`File not found: ${imagePath}`);
+            process.exit(1);
+        }
+
+        const spinner = yoctoSpinner({ text: "Analyzing image..." });
+        spinner.start();
+
+        try {
+            const base64Image = readImageAsBase64(imagePath);
+            const description = await describe(base64Image, {
+                token: session.access_token
+            });
+
+            spinner.stop();
+
+            outro(chalk.green('✅ Image description:'));
+            console.log(description);
+        } catch (error) {
+            spinner.stop();
+            if (error.message === 'Insufficient credits') {
+                cancel('Insufficient credits. Please add credits to your account.');
+                process.exit(1);
+            }
+            cancel(`Failed to describe image: ${error.message}`);
+            process.exit(1);
+        }
+    });
+
+function readImageAsBase64(imagePath) {
+    const imageBuffer = fs.readFileSync(imagePath);
+    return `data:image/${path.extname(imagePath).slice(1) || 'jpeg'};base64,${imageBuffer.toString('base64')}`;
+}
 
 program.parse(process.argv);
