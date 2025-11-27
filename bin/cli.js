@@ -195,25 +195,38 @@ program.command('whoami')
         }
     });
 
-program.command('edit <image-path>')
+program.command('edit <image-path> <prompt>')
     .description('Edit an image using AI')
-    .option('-p, --prompt <prompt>', 'Text description of the desired edit')
-    .action(async (imagePath, options) => {
-        intro(chalk.bgHex('#663399').white('CoreViz'));
+    .option('--quiet', 'Suppress UI output (for scripting)')
+    .action(async (imagePath, prompt, options) => {
+        if (!options.quiet) {
+            intro(chalk.bgHex('#663399').white('CoreViz'));
+        }
 
         const session = config.get('session');
         if (!session || !session.access_token) {
+            if (options.quiet) {
+                console.error('Not logged in.');
+                process.exit(1);
+            }
             cancel('You are not logged in. Please run `coreviz login` first.');
             process.exit(1);
         }
 
         if (!fs.existsSync(imagePath)) {
+            if (options.quiet) {
+                console.error(`File not found: ${imagePath}`);
+                process.exit(1);
+            }
             cancel(`File not found: ${imagePath}`);
             process.exit(1);
         }
 
-        let prompt = options.prompt;
         if (!prompt) {
+            if (options.quiet) {
+                console.error('Prompt is required in quiet mode.');
+                process.exit(1);
+            }
             prompt = await text({
                 message: 'What would you like to change in the image?',
                 placeholder: 'e.g., "Make it look like a painting" or "Add a red hat"',
@@ -228,8 +241,11 @@ program.command('edit <image-path>')
             }
         }
 
-        const spinner = yoctoSpinner({ text: "Processing image..." });
-        spinner.start();
+        let spinner;
+        if (!options.quiet) {
+            spinner = yoctoSpinner({ text: "Processing image..." });
+            spinner.start();
+        }
 
         try {
             const base64Image = readImageAsBase64(imagePath);
@@ -239,57 +255,199 @@ program.command('edit <image-path>')
                 prompt
             });
 
-            spinner.stop();
+            if (spinner) spinner.stop();
 
             // Save result
             const outputFilename = `edited-${Date.now()}-${path.basename(imagePath)}`;
             const outputBuffer = Buffer.from(resultBase64.replace(/^data:image\/\w+;base64,/, ""), 'base64');
             fs.writeFileSync(outputFilename, outputBuffer);
 
-            outro(chalk.green(`✅ Image edited successfully! Saved as ${outputFilename}`));
+            if (options.quiet) {
+                console.log(outputFilename);
+            } else {
+                outro(chalk.green(`✅ Image edited successfully! Saved as ${outputFilename}`));
+            }
 
         } catch (error) {
-            spinner.stop();
-            cancel(`Failed to edit image: ${error.message}`);
+            if (spinner) spinner.stop();
+            const msg = error.message.includes('credits')
+                ? 'Insufficient credits. Please add credits to your account on https://lab.coreviz.io.'
+                : `Failed to edit image: ${error.message}`;
+            if (options.quiet) {
+                console.error(msg);
+            } else {
+                cancel(msg);
+            }
             process.exit(1);
         }
     });
 
 program.command('describe <image-path>')
     .description('Describe an image using AI')
-    .action(async (imagePath) => {
-        intro(chalk.bgHex('#663399').white('CoreViz'));
+    .option('--quiet', 'Suppress UI output (for scripting)')
+    .action(async (imagePath, options) => {
+        if (!options.quiet) {
+            intro(chalk.bgHex('#663399').white('CoreViz'));
+        }
 
         const session = config.get('session');
         if (!session || !session.access_token) {
+            if (options.quiet) {
+                console.error('Not logged in.');
+                process.exit(1);
+            }
             cancel('You are not logged in. Please run `coreviz login` first.');
             process.exit(1);
         }
 
         if (!fs.existsSync(imagePath)) {
+            if (options.quiet) {
+                console.error(`File not found: ${imagePath}`);
+                process.exit(1);
+            }
             cancel(`File not found: ${imagePath}`);
             process.exit(1);
         }
 
-        const spinner = yoctoSpinner({ text: "Analyzing image..." });
-        spinner.start();
+        let spinner;
+        if (!options.quiet) {
+            spinner = yoctoSpinner({ text: "Analyzing image..." });
+            spinner.start();
+        }
 
         try {
             const base64Image = readImageAsBase64(imagePath);
             const coreviz = new CoreViz({ token: session.access_token });
             const description = await coreviz.describe(base64Image);
 
-            spinner.stop();
+            if (spinner) spinner.stop();
 
-            outro(chalk.green('✅ Image description:'));
-            console.log(description);
+            if (options.quiet) {
+                console.log(description);
+            } else {
+                outro(chalk.green('✅ Image description:'));
+                console.log(description);
+            }
         } catch (error) {
-            spinner.stop();
-            if (error.message === 'Insufficient credits') {
-                cancel('Insufficient credits. Please add credits to your account.');
+            if (spinner) spinner.stop();
+            const msg = error.message.includes('credits')
+                ? 'Insufficient credits. Please add credits to your account on https://lab.coreviz.io.'
+                : `Failed to describe image: ${error.message}`;
+
+            if (options.quiet) {
+                console.error(msg);
+            } else {
+                cancel(msg);
+            }
+            process.exit(1);
+        }
+    });
+
+program.command('tag <image-path> <prompt>')
+    .description('Generate tags for an image using AI')
+    .option('--choices <items>', 'Comma-separated list of possible tags to choose from (optional)', '')
+    .option('--single', 'Return only one tag', false)
+    .option('-m, --mode <mode>', 'The mode to use for tagging. Defaults to "api".', 'api')
+    .option('--quiet', 'Output raw text for scripting (suppresses UI)')
+    .action(async (imagePath, prompt, options) => {
+        if (!options.quiet) {
+            intro(chalk.bgHex('#663399').white('CoreViz'));
+        }
+
+        const session = config.get('session');
+        if (!session || !session.access_token) {
+            if (options.quiet) {
+                console.error('Not logged in.');
                 process.exit(1);
             }
-            cancel(`Failed to describe image: ${error.message}`);
+            cancel('You are not logged in. Please run `coreviz login` first.');
+            process.exit(1);
+        }
+
+        if (!fs.existsSync(imagePath)) {
+            if (options.quiet) {
+                console.error(`File not found: ${imagePath}`);
+                process.exit(1);
+            }
+            cancel(`File not found: ${imagePath}`);
+            process.exit(1);
+        }
+
+        let tagList = options.choices ? options.choices.split(',').map(s => s.trim()) : undefined;
+
+        if (!prompt) {
+            if (tagList && tagList.length > 0) {
+                prompt = "Select the best matching tags";
+            } else {
+                if (options.quiet) {
+                    console.error('Prompt is required in quiet mode.');
+                    process.exit(1);
+                }
+                prompt = await text({
+                    message: 'What kind of tags do you want to generate?',
+                    placeholder: 'e.g., "jersey number of the player", "color of the car", etc.',
+                    validate(value) {
+                        if (value.length === 0) return `Value is required!`;
+                    },
+                });
+
+                if (isCancel(prompt)) {
+                    cancel('Operation cancelled.');
+                    process.exit(0);
+                }
+            }
+        }
+
+        let spinner;
+        if (!options.quiet) {
+            setTimeout(() => {
+                if (spinner.isSpinning && options.mode === 'local') {
+                    spinner.text = "On the first run, it might take a few minutes to load the local model, please wait...";
+                } else if (spinner.isSpinning && options.mode === 'api') {
+                    spinner.text = "This might take a few seconds...";
+                }
+            }, 8000);
+            spinner = yoctoSpinner({ text: "Generating tags..." });
+            spinner.start();
+        }
+
+        try {
+            const base64Image = readImageAsBase64(imagePath);
+            const coreviz = new CoreViz({ token: session.access_token });
+
+            const response = await coreviz.tag(base64Image, {
+                mode: options.mode,
+                prompt,
+                options: tagList,
+                multiple: !options.single
+            });
+
+            if (spinner) spinner.stop();
+
+            if (options.quiet) {
+                if (response.tags && response.tags.length > 0) {
+                    console.log(response.tags.join('\n'));
+                }
+            } else {
+                if (response.tags && response.tags.length > 0) {
+                    outro(chalk.green('✅ Tags generated:'));
+                    response.tags.forEach(tag => console.log(chalk.blue(`• ${tag}`)));
+                } else {
+                    outro(chalk.yellow('No tags generated.'));
+                }
+            }
+
+        } catch (error) {
+            if (spinner) spinner.stop();
+            const msg = error.message.includes('credits')
+                ? 'Insufficient credits. Please add credits to your account on https://lab.coreviz.io.'
+                : `Failed to generate tags: ${error.message}`;
+
+            if (options.quiet) {
+                console.error(msg);
+            } else {
+                cancel(msg);
+            }
             process.exit(1);
         }
     });
@@ -297,19 +455,29 @@ program.command('describe <image-path>')
 program.command('search <query>')
     .description('Search for images in the current directory using AI')
     .option('-m, --mode <mode>', 'The mode to use for embedding. Defaults to "local".', 'local')
+    .option('--quiet', 'Suppress UI output (for scripting)')
     .action(async (query, options) => {
-        intro(chalk.bgHex('#663399').white('CoreViz'));
+        if (!options.quiet) {
+            intro(chalk.bgHex('#663399').white('CoreViz'));
+        }
 
         const mode = options.mode || 'local';
 
         const session = config.get('session');
         if (!session || !session.access_token) {
+            if (options.quiet) {
+                console.error('Not logged in.');
+                process.exit(1);
+            }
             cancel('You are not logged in. Please run `coreviz login` first.');
             process.exit(1);
         }
 
-        const spinner = yoctoSpinner({ text: "Indexing directory..." });
-        spinner.start();
+        let spinner;
+        if (!options.quiet) {
+            spinner = yoctoSpinner({ text: "Indexing directory..." });
+            spinner.start();
+        }
 
         const dbPath = path.join(process.cwd(), '.index.db');
         const db = new Database(dbPath);
@@ -328,7 +496,12 @@ program.command('search <query>')
             .filter(file => imageExtensions.includes(path.extname(file).toLowerCase()));
 
         if (files.length === 0) {
-            spinner.stop();
+            if (spinner) spinner.stop();
+            if (options.quiet) {
+                // No images found, just exit with 0 (empty result) or 1? 
+                // Usually empty search is exit 0 with empty stdout.
+                process.exit(0);
+            }
             cancel('No images found in the current directory.');
             process.exit(0);
         }
@@ -350,10 +523,13 @@ program.command('search <query>')
 
         if (mode === 'local') {
             // You're using the local model, it might take a few minutes for the model to load on the first run.
-            spinner.text = "Loading local model, this might take a few minutes to load the first time...";
-            spinner.start();
+            setTimeout(() => {
+                if (spinner.isSpinning && mode === 'local') {
+                    spinner.text = "On the first run, it might take a few minutes to load the local model, please wait...";
+                }
+            }, 8000);
             await coreviz.embedLocal('text', { type: 'text', mode: mode });
-            spinner.stop();
+            if (spinner) spinner.stop();
         }
 
         for (const file of files) {
@@ -368,7 +544,7 @@ program.command('search <query>')
                 continue;
             }
 
-            spinner.text = `Indexing ${file}...`;
+            if (spinner) spinner.text = `Indexing ${file}...`;
 
             try {
                 const base64Image = readImageAsBase64(filePath);
@@ -377,11 +553,17 @@ program.command('search <query>')
                 upsertFile.run(file, mtime, JSON.stringify(embedding));
             } catch (error) {
                 // Log error but continue
-                console.error(`Failed to index ${file}: ${error.message}`);
+                if (!options.quiet) {
+                    if (error.message.includes('credits')) {
+                        cancel('Insufficient credits. Please add credits to your account on https://lab.coreviz.io.');
+                        process.exit(1);
+                    }
+                    console.error(`Failed to index ${file}: ${error.message}`);
+                }
             }
         }
 
-        spinner.text = "Processing search query...";
+        if (spinner) spinner.text = "Processing search query...";
 
         try {
             const { embedding: queryEmbedding } = await coreviz.embed(query, { type: 'text', mode: mode });
@@ -395,49 +577,43 @@ program.command('search <query>')
                 const fileEmbedding = JSON.parse(row.embedding);
 
                 // Calculate cosine similarity
-                const similarity = cosineSimilarity(queryEmbedding, fileEmbedding);
+                const similarity = coreviz.similarity(queryEmbedding, fileEmbedding);
                 results.push({ file: row.path, similarity });
             }
 
             // Sort by similarity descending
             results.sort((a, b) => b.similarity - a.similarity);
 
-            spinner.stop();
+            if (spinner) spinner.stop();
 
-            outro(chalk.green(`✅ Search results for "${query}"`));
+            if (options.quiet) {
+                // Output raw file paths (top 5)
+                results.slice(0, 5).forEach(result => {
+                    console.log(result.file);
+                });
+            } else {
+                outro(chalk.green(`✅ Search results for "${query}"`));
 
-            // Show top 5 results
-            results.slice(0, 5).forEach((result, i) => {
-                const score = (result.similarity * 100).toFixed(1);
-                console.log(`${i + 1}. ${chalk.bold(result.file)} ${chalk.gray(`(${score}%)`)}`);
-            });
+                // Show top 5 results
+                results.slice(0, 5).forEach((result, i) => {
+                    const score = (result.similarity * 100).toFixed(1);
+                    console.log(`${i + 1}. ${chalk.bold(result.file)} ${chalk.gray(`(${score}%)`)}`);
+                });
+            }
 
         } catch (error) {
-            spinner.stop();
-            cancel(`Search failed: ${error.message}`);
+            if (spinner) spinner.stop();
+            const msg = `Search failed: ${error.message}`;
+            if (options.quiet) {
+                console.error(msg);
+            } else {
+                cancel(msg);
+            }
             process.exit(1);
         } finally {
             db.close();
         }
     });
-
-function cosineSimilarity(vecA, vecB) {
-    if (vecA.length !== vecB.length) return 0;
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-        dotProduct += vecA[i] * vecB[i];
-        normA += vecA[i] * vecA[i];
-        normB += vecB[i] * vecB[i];
-    }
-
-    if (normA === 0 || normB === 0) return 0;
-
-    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-}
 
 function readImageAsBase64(imagePath) {
     const imageBuffer = fs.readFileSync(imagePath);
