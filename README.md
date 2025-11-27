@@ -30,6 +30,10 @@ CoreViz is a Vision AI platform for teams and individuals working with thousands
 
 # @coreviz/cli
 
+<p align="center">
+   <a href="https://coreviz.io"><img alt="CoreViz" src="./screenshots/cli-demo.gif"></a>
+</p>
+
 An AI-powered CLI for working with photos. Semantically search, edit, tag and generate metadata for thousands of photos right from the command line. 
 
 ## Installation
@@ -81,6 +85,12 @@ Classify an image using specific choices:
 npx @coreviz/cli tag path/to/image.jpg --choices "receipt,invoice,document" --single
 ```
 
+Run tagging locally (offline capable):
+
+```bash
+npx @coreviz/cli tag path/to/image.jpg "prompt" --mode local
+```
+
 Search local images using natural language:
 
 ```bash
@@ -92,6 +102,21 @@ npx @coreviz/cli search "a person wearing a red t-shirt"
 
 This will index the images in your current directory (creating a `.index.db` file) and return the top matches for your query.
 
+You can also use the cloud API for embeddings:
+
+```bash
+npx @coreviz/cli search "query" --mode api
+```
+
+
+### Scripting
+
+All commands support a `--quiet` flag to suppress UI output and return only raw results.
+
+```bash
+# Returns only the file path of the edited image
+npx @coreviz/cli edit image.jpg "prompt" --quiet
+```
 
 ### Authentication
 
